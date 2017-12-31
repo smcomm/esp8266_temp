@@ -17,9 +17,6 @@ extern "C" {
 const char* ap_default_ssid = "wifi-temp"; ///< Default SSID. 不能作为wifi客户端连接到ap时，主动开的ap。
 const char* ap_default_psk = ""; ///< Default PSK.
 
-/// Uncomment the next line for verbose output over UART.
-//#define SERIAL_VERBOSE
-
 bool loadConfig(String *ssid, String *pass)
 {
   // 打开文件读取.
@@ -67,13 +64,6 @@ bool loadConfig(String *ssid, String *pass)
   ssid->trim();
   pass->trim();
 
-#ifdef SERIAL_VERBOSE
-  Serial.println("----- file content -----");
-  Serial.println(content);
-  Serial.println("----- file content -----");
-  Serial.println("ssid: " + *ssid);
-  Serial.println("psk:  " + *pass);
-#endif
 
   return true;
 } // loadConfig
@@ -128,7 +118,7 @@ void setup()
 
   if (! loadConfig(&station_ssid, &station_psk))
   {
-    Serial.println("wifi set is fail.  running AP mode.\r\nssid:wifi-temp\r\npasswd:none");
+    Serial.println("wifi set is fail.");
     AP(); //打开ap，等待客户端链接上来进行设置。
     return;
   }
@@ -140,7 +130,6 @@ void setup()
 
   // Print hostname.
   Serial.println("Hostname: " + hostname);
-  //Serial.println(WiFi.hostname());
 
   // Check WiFi connection
   // ... check mode
@@ -192,7 +181,7 @@ void setup()
   }
   else
   {
-    Serial.println("Can not connect to WiFi station. Go into AP mode.");
+    Serial.println("Can not connect to WiFi station.");
     AP();
   }
 
@@ -200,12 +189,13 @@ void setup()
 void AP() {
   // Go into software AP mode.
   struct softap_config cfgESP;
+  Serial.println("Go into AP mode.\r\nssid:wifi-temp\r\npasswd:none");
   WiFi.mode(WIFI_AP);
 
   while (!wifi_softap_get_config(&cfgESP)) {
     system_soft_wdt_feed();
   }
-  cfgESP.authmode = AUTH_OPEN;
+  cfgESP.authmode = AUTH_OPEN;//无密码模式
   wifi_softap_set_config(&cfgESP);
   delay(10);
 
@@ -222,16 +212,17 @@ void AP() {
   }
   Serial.println("mDNS responder started");
 }
-uint32_t lasttime=0;
+uint32_t lasttime = 0;
 void loop()
 {
-  if(lasttime+10000 <millis()) {
-    lasttime=millis()/1000*1000;
-  temp = sensors.getTempC(sn_18b20);
-  Serial.print("temp=");
-  Serial.print(temp);
-  Serial.println("C");
-}
+  if (lasttime + 10000 < millis()) {
+    lasttime = millis() / 1000 * 1000;
+    temp = sensors.getTempC(sn_18b20);
+    Serial.print("temp=");
+    Serial.print(temp);
+    Serial.println("C");
+    sensors.requestTemperatures();
+  }
   system_soft_wdt_feed();
 }
 
