@@ -1,7 +1,11 @@
-
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <FS.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+OneWire oneWire(2);
+DallasTemperature sensors(&oneWire);
+DeviceAddress sn_18b20;
 
 extern "C" {
 #include "user_interface.h"
@@ -30,7 +34,7 @@ bool loadConfig(String *ssid, String *pass)
   // 读取全部内容.
   String content = configFile.readString();
   configFile.close();
-  
+
   content.trim();
 
   //  查找第二行的位置.
@@ -91,11 +95,11 @@ bool saveConfig(String *ssid, String *pass)
   configFile.println(*pass);
 
   configFile.close();
-  
+
   return true;
 } // saveConfig
 
-
+float temp = -999;
 void setup()
 {
   String station_ssid = "";
@@ -103,8 +107,14 @@ void setup()
 
   wdt_disable();
   Serial.begin(115200);
-  
-  delay(100);
+
+  sensors.begin();
+  if (sensors.getAddress(sn_18b20, 0))
+  {
+    sensors.setResolution(sn_18b20, 12);
+    sensors.setWaitForConversion(true);
+    sensors.requestTemperatures(); // Send the command to get temperatures
+  }
 
   Serial.println("\r\n");
   Serial.print("Chip ID: 0x");
@@ -118,7 +128,7 @@ void setup()
 
   if (! loadConfig(&station_ssid, &station_psk))
   {
-Serial.println("wifi set is fail.  running AP mode.\r\nssid:wifi-temp\r\npasswd:none");
+    Serial.println("wifi set is fail.  running AP mode.\r\nssid:wifi-temp\r\npasswd:none");
     AP(); //打开ap，等待客户端链接上来进行设置。
     return;
   }
@@ -174,7 +184,7 @@ Serial.println("wifi set is fail.  running AP mode.\r\nssid:wifi-temp\r\npasswd:
   Serial.println();
 
   // Check connection
-  if(WiFi.status() == WL_CONNECTED)
+  if (WiFi.status() == WL_CONNECTED)
   {
     // ... print IP Address
     Serial.print("IP address: ");
@@ -183,37 +193,45 @@ Serial.println("wifi set is fail.  running AP mode.\r\nssid:wifi-temp\r\npasswd:
   else
   {
     Serial.println("Can not connect to WiFi station. Go into AP mode.");
-AP();  
-}
-}
-void AP(){    
-    // Go into software AP mode.
-    struct softap_config cfgESP;
-    WiFi.mode(WIFI_AP);
-    
-while(!wifi_softap_get_config(&cfgESP)){
-  system_soft_wdt_feed();
-}
-cfgESP.authmode=AUTH_OPEN;
-wifi_softap_set_config(&cfgESP);
-    delay(10);
+    AP();
+  }
 
-    WiFi.softAP(ap_default_ssid, ap_default_psk);
+}
+void AP() {
+  // Go into software AP mode.
+  struct softap_config cfgESP;
+  WiFi.mode(WIFI_AP);
 
-    Serial.print("IP address: ");
-    Serial.println(WiFi.softAPIP());
-  
+  while (!wifi_softap_get_config(&cfgESP)) {
+    system_soft_wdt_feed();
+  }
+  cfgESP.authmode = AUTH_OPEN;
+  wifi_softap_set_config(&cfgESP);
+  delay(10);
+
+  WiFi.softAP(ap_default_ssid, ap_default_psk);
+
+  Serial.print("IP address: ");
+  Serial.println(WiFi.softAPIP());
+
   if (!MDNS.begin("temp")) {
     Serial.println("Error setting up MDNS responder!");
-    while(1) { 
+    while (1) {
       delay(1000);
     }
   }
   Serial.println("mDNS responder started");
 }
-
+uint32_t lasttime=0;
 void loop()
 {
+  if(lasttime+10000 <millis()) {
+    lasttime=millis()/1000*1000;
+  temp = sensors.getTempC(sn_18b20);
+  Serial.print("temp=");
+  Serial.print(temp);
+  Serial.println("C");
+}
   system_soft_wdt_feed();
 }
 
