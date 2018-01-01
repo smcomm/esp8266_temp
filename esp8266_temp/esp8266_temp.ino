@@ -1,5 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
+#include <WiFiClientSecure.h>
 #include <FS.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -11,6 +12,9 @@ extern "C" {
 #include "user_interface.h"
 }
 
+const char* host = "liuxiaoyang.wf163.com"; //需要访问的域名
+const int httpsPort = 88;  // 需要访问的端口
+const String url = "/lxy/esp/access.php";   // 需要访问的地址
 
 #define HOSTNAME "wifi-temp" ///< Hostename. The setup function adds the Chip ID at the end.
 
@@ -95,7 +99,6 @@ void setup()
   String station_ssid = "";
   String station_psk = "";
 
-  wdt_disable();
   Serial.begin(115200);
 
   sensors.begin();
@@ -160,6 +163,10 @@ void setup()
     WiFi.begin();
   }
 
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+  Serial.print("PSK: ");
+  Serial.println(WiFi.psk());
   Serial.println("Wait for WiFi connection.");
 
   // ... Give ESP 10 seconds to connect to station.
@@ -211,18 +218,40 @@ void AP() {
     }
   }
   Serial.println("mDNS responder started");
+
+
+  temp = sensors.getTempC(sn_18b20) * 100;
+
+  wifi_set_sleep_type(LIGHT_SLEEP_T);
+
 }
+
+WiFiClient client;
 uint32_t lasttime = 0;
 void loop()
 {
-  if (lasttime + 10000 < millis()) {
+  // system_deep_sleep_set_option(1);
+  // system_deep_sleep(600000000); //600秒
+  if (lasttime + 60000 < millis())
+  {
     lasttime = millis() / 1000 * 1000;
     temp = sensors.getTempC(sn_18b20);
     Serial.print("temp=");
     Serial.print(temp);
     Serial.println("C");
-    sensors.requestTemperatures();
+    Serial.flush();
+    String postRequest = (String)("GET ") + url + " HTTP/1.1\r\n" +
+                         "Content-Type: text/html;charset=utf-8\r\n" +
+                         "Host: " + host + "\r\n" +
+                         "User-Agent: BuildFailureDetectorESP8266\r\n" +
+                         "Connection: Keep Alive\r\n\r\ntemp=" + String(temp, 3);
+
+    Serial.println(postRequest);
+    client.print(postRequest);  // 发送HTTP请求
+
+    sensors.getTempC(sn_18b20);
   }
   system_soft_wdt_feed();
+  yield();
 }
 
